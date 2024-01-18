@@ -1,55 +1,60 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>World Editor</title>
-    <link rel="stylesheet" href="style.css" type="text/css" media="screen" charset="utf-8" />
-  </head>
-  <body>
-    <h1>World Editor</h1>
-    <canvas id="canvas"></canvas>
+   <head>
+      <title>World Editor</title>
+      <link rel="stylesheet" href="styles.css"/>
+   </head>
+   <body>
+      <h1>World Editor</h1>
+      <canvas id="myCanvas"></canvas>
+      <div id="controls">
+         <button onclick="dispose()">🗑️</button>
+         <button onclick="save()">💾</button>
+      </div>
 
-    <div id="controls"></div>
+      <script src="js/world.js"></script>
+      <script src="js/graphEditor.js"></script>
+      <script src="js/viewport.js"></script>
+      <script src="js/math/utils.js"></script>
+      <script src="js/math/graph.js"></script>
+      <script src="js/primitives/point.js"></script>
+      <script src="js/primitives/segment.js"></script>
+      <script src="js/primitives/polygon.js"></script>
+      <script src="js/primitives/envelope.js"></script>
+      <script>
+         myCanvas.width = 600;
+         myCanvas.height = 600;
 
-    <script src="js/math/graph.js"></script>
-    <script src="js/math/utils.js"></script>
-    <script src="js/graphEditor.js"></script>
-    <script src="js/viewport.js"></script>
-    <script src="js/primitives/point.js"></script>
-    <script src="js/primitives/segment.js"></script>
+         const ctx = myCanvas.getContext("2d");
 
-    <script>
-      canvas.width = 900;
-      canvas.height = 800;
+         const graphString = localStorage.getItem("graph");
+         const graphInfo = graphString ? JSON.parse(graphString) : null;
+         const graph = graphInfo
+            ? Graph.load(graphInfo)
+            : new Graph();
+         const world = new World(graph);
 
-      const ctx = canvas.getContext('2d');
+         const viewport = new Viewport(myCanvas);
+         const graphEditor = new GraphEditor(viewport, graph);
 
-      const p1 = new Point(400, 200);
-      const p2 = new Point(300, 500);
-      const p3 = new Point(700, 700);
-      const p4 = new Point(400, 750);
+         animate();
 
-      const s1 = new Segment(p1, p2);
-      const s2 = new Segment(p2, p4);
-      const s3 = new Segment(p3, p4);
-      const s4 = new Segment(p4, p1);
+         function animate() {
+            viewport.reset();
+            world.generate();
+            world.draw(ctx);
+            ctx.globalAlpha = 0.3;
+            graphEditor.display();
+            requestAnimationFrame(animate);
+         }
 
-      const graph = new Graph([p1, p2, p3, p4], [s1, s2, s3, s4]);
-      const viewport = new Viewport(canvas);
-      const graphEditor = new GraphEditor(viewport, graph, ctx);
+         function dispose() {
+            graphEditor.dispose();
+         }
 
-      animate();
-
-      function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.save();
-        ctx.translate(viewport.center.x, viewport.center.y);
-        ctx.scale(1 / viewport.zoom, 1 / viewport.zoom);
-        const offset = viewport.getOffset();
-        ctx.translate(offset.x, offset.y);
-        graphEditor.display();
-        ctx.restore();
-        requestAnimationFrame(animate);
-      }
-    </script>
-  </body>
+         function save() {
+            localStorage.setItem("graph", JSON.stringify(graph));
+         }
+      </script>
+   </body>
 </html>
