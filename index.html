@@ -1,60 +1,144 @@
 <!DOCTYPE html>
 <html>
-   <head>
-      <title>World Editor</title>
-      <link rel="stylesheet" href="styles.css"/>
-   </head>
-   <body>
-      <h1>World Editor</h1>
-      <canvas id="myCanvas"></canvas>
-      <div id="controls">
-         <button onclick="dispose()">🗑️</button>
-         <button onclick="save()">💾</button>
-      </div>
+  <head>
+    <title>World Editor</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <h1>World Editor</h1>
+    <canvas id="myCanvas"></canvas>
+    <div id="controls">
+      <button onclick="dispose()">🗑️</button>
+      <button onclick="save()">💾</button>
+      <label for="fileInput" class="file-input-label"
+        >📂<input type="file" id="fileInput" accept=".world" onchange="load(event)" />
+      </label>
+      $nbsp;
+      <button id="graphBtn" onclick="setMode('graph')">💹</button>
+      <button id="stopBtn" onclick="setMode('stop')">🛑</button>
+      <button id="crossingBtn" onclick="setMode('crossing')">🚶‍♂️</button>
+      <button id="startBtn" onclick="setMode('start')">🚘</button>
+    </div>
 
-      <script src="js/world.js"></script>
-      <script src="js/graphEditor.js"></script>
-      <script src="js/viewport.js"></script>
-      <script src="js/math/utils.js"></script>
-      <script src="js/math/graph.js"></script>
-      <script src="js/primitives/point.js"></script>
-      <script src="js/primitives/segment.js"></script>
-      <script src="js/primitives/polygon.js"></script>
-      <script src="js/primitives/envelope.js"></script>
-      <script>
-         myCanvas.width = 600;
-         myCanvas.height = 600;
+    <script src="js/viewport.js"></script>
+    <script src="js/world.js"></script>
 
-         const ctx = myCanvas.getContext("2d");
+    <script src="js/assets/building.js"></script>
+    <script src="js/assets/tree.js"></script>
 
-         const graphString = localStorage.getItem("graph");
-         const graphInfo = graphString ? JSON.parse(graphString) : null;
-         const graph = graphInfo
-            ? Graph.load(graphInfo)
-            : new Graph();
-         const world = new World(graph);
+    <script src="js/editors/markingEditor.js"></script>
+    <script src="js/editors/crossingEditor.js"></script>
+    <script src="js/editors/graphEditor.js"></script>
+    <script src="js/editors/stopEditor.js"></script>
+    <script src="js/editors/startEditor.js"></script>
 
-         const viewport = new Viewport(myCanvas);
-         const graphEditor = new GraphEditor(viewport, graph);
+    <script src="js/markings/marking.js"></script>
+    <script src="js/markings/crossing.js"></script>
+    <script src="js/markings/stop.js"></script>
+    <script src="js/markings/start.js"></script>
 
-         animate();
+    <script src="js/math/graph.js"></script>
+    <script src="js/math/utils.js"></script>
 
-         function animate() {
-            viewport.reset();
-            world.generate();
-            world.draw(ctx);
-            ctx.globalAlpha = 0.3;
-            graphEditor.display();
-            requestAnimationFrame(animate);
-         }
+    <script src="js/primitives/envelope.js"></script>
+    <script src="js/primitives/point.js"></script>
+    <script src="js/primitives/polygon.js"></script>
+    <script src="js/primitives/segment.js"></script>
+    <script>
+      myCanvas.width = 900;
+      myCanvas.height = 750;
 
-         function dispose() {
-            graphEditor.dispose();
-         }
+      const ctx = myCanvas.getContext('2d');
 
-         function save() {
-            localStorage.setItem("graph", JSON.stringify(graph));
-         }
-      </script>
-   </body>
+      const worldString = localStorage.getItem('world');
+      const worldInfo = worldString ? JSON.parse(worldString) : null;
+
+      let world = worldInfo ? World.load(worldInfo) : new World(new Graph());
+
+      const graph = world.graph;
+
+      const viewport = new Viewport(myCanvas, world.zoom, world.offset);
+
+      const tools = {
+        graph: { button: graphBtn, editor: new GraphEditor(viewport, graph) },
+        stop: { button: stopBtn, editor: new StopEditor(viewport, world) },
+        crossing: { button: crossingBtn, editor: new CrossingEditor(viewport, world) },
+        start: { button: startBtn, editor: new StartEditor(viewport, world) },
+      };
+      let oldGraphHash = graph.hash();
+
+      setMode('graph');
+      animate();
+
+      function animate() {
+        viewport.reset();
+        if (graph.hash() !== oldGraphHash) {
+          world.generate();
+          oldGraphHash = graph.hash();
+        }
+        const viewPoint = scale(viewport.getOffset(), -1);
+
+        world.draw(ctx, viewPoint);
+        ctx.globalAlpha = 0.3;
+        for (const tool of Object.values(tools)) {
+          tool.editor.display();
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      function dispose() {
+        tools['graph'].editor.dispose();
+        world.markings.length = 0;
+      }
+
+      function save() {
+        world.zoom = viewport.zoom;
+        world.offset = viewport.offset;
+        const element = document.createElement('a');
+        element.setAttribute(
+          'href',
+          'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(world))
+        );
+
+        const fileName = 'name.world';
+        element.setAttribute('download', fileName);
+
+        element.click();
+
+        localStorage.setItem('world', JSON.stringify(world));
+      }
+
+      function load(event) {
+        const file = event.target.files[0];
+        if (!file) {
+          alert('No file selected');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const worldInfo = JSON.parse(e.target.result);
+          world = World.load(worldInfo);
+          localStorage.setItem('world', JSON.stringify(world));
+          location.reload();
+        };
+        reader.readAsText(file);
+      }
+
+      function setMode(mode) {
+        disableEditors();
+        tools[mode].button.style.backgroundColor = 'white';
+        tools[mode].button.style.filter = '';
+        tools[mode].editor.enable();
+      }
+
+      function disableEditors() {
+        for (const tool of Object.values(tools)) {
+          tool.button.style.backgroundColor = 'gray';
+          tool.button.style.filter = 'grayscale(100%)';
+          tool.editor.disable();
+        }
+      }
+    </script>
+  </body>
 </html>
